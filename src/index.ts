@@ -1,4 +1,4 @@
-import { readStdin, getUsageFromStdin, getContextPercent } from "./stdin.js";
+import { readStdin, getUsageFromStdin, getContextPercent, normalizeContextWindow } from "./stdin.js";
 import { parseTranscript } from "./transcript.js";
 import { render } from "./render/index.js";
 import { countConfigs } from "./config-reader.js";
@@ -131,6 +131,11 @@ export async function main(overrides: Partial<MainDeps> = {}): Promise<void> {
 
     const transcriptPath = stdin.transcript_path ?? "";
     const transcript = await deps.parseTranscript(transcriptPath);
+
+    // Correct under-reported window sizes (e.g. Fable 5 frames carrying
+    // 200000 with >400K real tokens) BEFORE the cache fallback, so the
+    // corrected frame is both what renders and what gets cached.
+    normalizeContextWindow(stdin);
 
     deps.applyContextWindowFallback(stdin, {}, transcript.sessionName, {
       lastCompactBoundaryAt: transcript.lastCompactBoundaryAt,
