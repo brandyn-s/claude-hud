@@ -10,6 +10,15 @@ type ReadStdinOptions = {
 };
 export declare function readStdin(stream?: StdinStream, options?: ReadStdinOptions): Promise<StdinData | null>;
 export declare function getTotalTokens(stdin: StdinData): number;
+/**
+ * Correct an under-reported context_window_size in place, recomputing the
+ * native percentages from token counts (they were computed against the wrong
+ * size, so they are wrong by the same factor — including clamped-to-100
+ * frames). No-op when the model is unknown or the size is already correct;
+ * runs before the context-cache fallback so corrected frames are what get
+ * cached.
+ */
+export declare function normalizeContextWindow(stdin: StdinData): void;
 export declare function getContextPercent(stdin: StdinData, autoCompactWindow?: number | null): number;
 export declare function getBufferedPercent(stdin: StdinData, autoCompactWindow?: number | null): number;
 export declare function getModelName(stdin: StdinData): string;

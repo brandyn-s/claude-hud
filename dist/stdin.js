@@ -132,6 +132,48 @@ function getNativePercent(stdin) {
     }
     return null;
 }
+/**
+ * Known model context windows that Claude Code has been observed
+ * under-reporting on stdin. Measured 2026-08-19 on a Fable 5 session:
+ * a frame carried current_usage totaling ~473K tokens beside
+ * context_window_size=200000 and used_percentage clamped to 100 — Fable 5's
+ * window is 1M (both the default and the maximum). Keyed on model id AND
+ * display name because proxies can populate either.
+ */
+const MODEL_CONTEXT_WINDOW_OVERRIDES = [
+    { pattern: /fable-5|mythos-5|\bfable\b|\bmythos\b/i, size: 1_000_000 },
+];
+/**
+ * Correct an under-reported context_window_size in place, recomputing the
+ * native percentages from token counts (they were computed against the wrong
+ * size, so they are wrong by the same factor — including clamped-to-100
+ * frames). No-op when the model is unknown or the size is already correct;
+ * runs before the context-cache fallback so corrected frames are what get
+ * cached.
+ */
+export function normalizeContextWindow(stdin) {
+    const contextWindow = stdin.context_window;
+    if (!contextWindow) {
+        return;
+    }
+    const modelText = `${stdin.model?.id ?? ''} ${stdin.model?.display_name ?? ''}`;
+    const override = MODEL_CONTEXT_WINDOW_OVERRIDES.find((o) => o.pattern.test(modelText));
+    if (!override) {
+        return;
+    }
+    const reportedSize = contextWindow.context_window_size ?? 0;
+    if (reportedSize >= override.size) {
+        return;
+    }
+    debug('normalizing context_window_size %d -> %d for model %s', reportedSize, override.size, modelText.trim());
+    contextWindow.context_window_size = override.size;
+    const totalTokens = getTotalTokens(stdin);
+    if (totalTokens > 0) {
+        const pct = Math.min(100, Math.max(0, Math.round((totalTokens / override.size) * 100)));
+        contextWindow.used_percentage = pct;
+        contextWindow.remaining_percentage = 100 - pct;
+    }
+}
 export function getContextPercent(stdin, autoCompactWindow) {
     if (typeof autoCompactWindow === 'number' && autoCompactWindow > 0) {
         const totalTokens = getTotalTokens(stdin);
